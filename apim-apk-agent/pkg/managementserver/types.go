@@ -104,30 +104,3 @@ type ApplicationMapping struct {
 type ApplicationMappingList struct {
 	List []ApplicationMapping `json:"list"`
 }
-
-type APICPEvent struct {
-	Event EventType `json:"event"`
-	API   API       `json:"payload"`
-}
-
-type EventType string
-
-type API struct {
-	APIUUID           string     `json:"apiUUID"`
-	APIName           string     `json:"apiName"`
-	APIVersion        string     `json:"apiVersion"`
-	IsDefaultVersion  bool       `json:"isDefaultVersion"`
-	Definition        string     `json:"definition"`
-	APIType           string     `json:"apiType"`
-	BasePath          string     `json:"basePath"`
-	Organization      string     `json:"organization"`
-	SystemAPI         bool       `json:"systemAPI"`
-	APIProperties     []Property `json:"apiProperties,omitempty"`
-	Environment       string     `json:"environment,omitempty"`
-	RevisionID        string     `json:"revisionID"`
-}
-
-type Property struct {
-	Name  string `json:"name,omitempty"`
-	Value string `json:"value,omitempty"`
-}
