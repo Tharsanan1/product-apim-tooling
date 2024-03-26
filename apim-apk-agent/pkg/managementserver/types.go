@@ -112,6 +112,11 @@ type APICPEvent struct {
 
 type EventType string
 
+const (
+	CreateEvent EventType = "CREATE"
+	DeleteEvent EventType = "DELETE"
+)
+
 type API struct {
 	APIUUID           string     `json:"apiUUID"`
 	APIName           string     `json:"apiName"`

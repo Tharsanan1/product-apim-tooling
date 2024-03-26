@@ -38,6 +38,7 @@ const (
 	ApiImportRelativePath   = "api/am/publisher/v4/apis/import?preserveProvider=false&overwrite=true"
 	DCRRegisterRelativePath = "client-registration/v0.17/register"
 	TokenRelativePath       = "oauth2/token"
+	APIDeleteRelativePath   = "api/am/publisher/v4/apis/"
 	payloadJson             = `{
         "callbackUrl": "www.google.lk",
         "clientName": "rest_api_publisher",
@@ -53,6 +54,7 @@ var (
 	dcrRegisterUrl string
 	tokenUrl       string
 	apiImportUrl   string
+	apiDeleteUrl   string
 	username       string
 	password       string
 	skipSSL        bool
@@ -73,15 +75,16 @@ func init() {
 		apiImportUrl = cpURL + ApiImportRelativePath
 		dcrRegisterUrl = cpURL + DCRRegisterRelativePath
 		tokenUrl = cpURL + TokenRelativePath
+		apiDeleteUrl = cpURL + APIDeleteRelativePath
 	} else {
 		apiImportUrl = cpURL + "/" + ApiImportRelativePath
 		dcrRegisterUrl = cpURL + "/" + DCRRegisterRelativePath
 		tokenUrl = cpURL + "/" + TokenRelativePath
+		apiDeleteUrl = cpURL + "/" + APIDeleteRelativePath
 	}
 	username = cpConfigs.Username
 	password = cpConfigs.Password
-	// skipSSL = cpConfigs.SkipSSLVerification
-	skipSSL = true
+	skipSSL = cpConfigs.SkipSSLVerification
 }
 
 func Base64EncodeCredentials(username, password string) string {
@@ -224,6 +227,31 @@ func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected response status: %s", resp.Status)
+	}
+
+	return nil
+}
+
+func DeleteAPI(apiUUID string) error {
+	deleteUrl := apiDeleteUrl + apiUUID
+	token, err := RegistClientAndGetToken([]string{string(AdminScope), string(ImportExportScope)})
+		if(err != nil) {
+		return err
+	}
+	req, err := http.NewRequest("DELETE", deleteUrl, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error occured while deleting the API. Status: %s", resp.Status)
 	}
 
 	return nil
