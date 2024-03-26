@@ -115,7 +115,8 @@ func createAPIYaml(apiCPEvent APICPEvent) string {
 			"name":                         apiCPEvent.API.APIName,
 			"context":                      apiCPEvent.API.BasePath,
 			"version":                      apiCPEvent.API.APIVersion,
-			"provider":                     apiCPEvent.API.Organization,
+			"organizationId":               apiCPEvent.API.Organization,
+			"provider":                     "admin",
 			"lifeCycleStatus":              "PUBLISHED", // Assuming this is fixed
 			"responseCachingEnabled":       false,       // Assuming this is fixed
 			"cacheTimeout":                 300,         // Assuming this is fixed
@@ -135,7 +136,9 @@ func createAPIYaml(apiCPEvent APICPEvent) string {
 					"url": "http://local",
 				},
 			},
-			"policies": []string{"Unlimited"},
+			"policies":      []string{"Unlimited"},
+			"gatewayType":   "wso2/apk",
+			"gatewayVendor": "wso2",
 		},
 	}
 
