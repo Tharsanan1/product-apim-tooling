@@ -17,6 +17,7 @@
 package managementserver
 
 import (
+	"archive/zip"
 	"bytes"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,7 @@ import (
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/loggers"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/utils"
 	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -55,19 +57,45 @@ func StartInternalServer(port uint) {
 
 		apiYaml := createAPIYaml(event)
 		definition := event.API.Definition
+		loggers.LoggerMgtServer.Infof("Api yaml : %s, definition: %s", string(apiYaml), string(definition))
+
 		zipFiles := []utils.ZipFile{{
-			Path:    "api.yaml",
+			Path:    fmt.Sprintf("%s-%s/api.yaml", event.API.APIName, event.API.APIVersion),
 			Content: apiYaml,
 		}, {
-			Path:    "Definitions/swagger.yaml",
+			Path:    fmt.Sprintf("%s-%s/Definitions/swagger.yaml", event.API.APIName, event.API.APIVersion),
 			Content: definition,
 		}}
 		var buf bytes.Buffer
 		if err := utils.CreateZipFile(&buf, zipFiles); err != nil {
 			loggers.LoggerMgtServer.Errorf("Error while creating apim zip file for api uuid: %s. Error: %+v", event.API.APIUUID, err)
 		}
+
+		// TODO delete chunk 1 start
+		zipReader, err1 := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		if err1 != nil {
+			loggers.LoggerMgtServer.Errorf("Error reading zip data: %s", err1)
+		}
+
+		fmt.Println("Contents of the zip file:")
+		for _, file := range zipReader.File {
+			loggers.LoggerMgtServer.Infoln("filename: " + file.Name)
+		}
+		// delete chunk 1 end
+
+		// TODO delete chunk 2 start
+		// Write the zip data to a file
+		err2 := ioutil.WriteFile("output.zip", buf.Bytes(), 0644)
+		if err2 != nil {
+			loggers.LoggerMgtServer.Errorf("Error writing zip data to file: %s", err2)
+		} else {
+			fmt.Println("Zip file written successfully!")
+		}
+		// delete chunk 2 end
+
 		err := utils.ImportAPI(fmt.Sprintf("admin-%s-%s.zip", event.API.APIName, event.API.APIVersion), &buf)
-		if (err != nil) {
+		if err != nil {
+			loggers.LoggerMgtServer.Errorf("Error while importing API. Sending error response to Adapter.")
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -98,6 +126,16 @@ func createAPIYaml(apiCPEvent APICPEvent) string {
 			"enableSchemaValidation":       false,                     // Assuming this is fixed
 			"enableSubscriberVerification": false,                     // Assuming this is fixed
 			"type":                         "HTTP",                    // Assuming this is fixed
+			"endpointConfig": map[string]interface{}{
+				"endpoint_type": "http",
+				"sandbox_endpoints": map[string]interface{}{
+					"url": "http://local",
+				},
+				"production_endpoints": map[string]interface{}{
+					"url": "http://local",
+				},
+			},
+			"policies": []string{"Unlimited"},
 		},
 	}
 

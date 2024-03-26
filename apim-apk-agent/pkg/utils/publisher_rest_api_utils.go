@@ -29,12 +29,13 @@ import (
 	"io/ioutil"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/config"
 	logger "github.com/wso2/product-apim-tooling/apim-apk-agent/internal/loggers"
+	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/tlsutils"
 )
 
 type Scope string
 
 const (
-	ApiImportRelativePath   = "api/am/publisher/v4/apis/import?preserveProvider=false&overwrite=false"
+	ApiImportRelativePath   = "api/am/publisher/v4/apis/import?preserveProvider=false&overwrite=true"
 	DCRRegisterRelativePath = "client-registration/v0.17/register"
 	TokenRelativePath       = "oauth2/token"
 	payloadJson             = `{
@@ -54,6 +55,7 @@ var (
 	apiImportUrl   string
 	username       string
 	password       string
+	skipSSL        bool
 )
 
 func init() {
@@ -78,6 +80,8 @@ func init() {
 	}
 	username = cpConfigs.Username
 	password = cpConfigs.Password
+	// skipSSL = cpConfigs.SkipSSLVerification
+	skipSSL = true
 }
 
 func Base64EncodeCredentials(username, password string) string {
@@ -90,7 +94,7 @@ func GetBasicAuthHeaderValue(username, password string) string {
 }
 
 func RegisterClient() ([]byte, error){
-	client := &http.Client{}
+	
 	body := bytes.NewBuffer([]byte(payloadJson))
 	req, err := http.NewRequest("POST", dcrRegisterUrl, body)
 	if err != nil {
@@ -98,7 +102,7 @@ func RegisterClient() ([]byte, error){
 	}
 	req.Header.Set("Authorization", GetBasicAuthHeaderValue(username, password))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
+	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +133,8 @@ func GetToken(scopes []string, clientId string, clientSecret string) (string, er
 	}
 	req.Header.Set("Authorization", GetBasicAuthHeaderValue(clientId, clientSecret))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	
+	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
 		return "", err
 	}
@@ -189,10 +193,9 @@ func RegistClientAndGetToken(scopes []string) (string, error){
 
 func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) error {
 	token, err := RegistClientAndGetToken([]string{string(AdminScope), string(ImportExportScope)})
-	if(err != nil) {
+		if(err != nil) {
 		return err
 	}
-	client := &http.Client{}
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", apiZipName)
@@ -209,12 +212,16 @@ func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	// req.Header.Set("Content-Type", writer.FormDataContentType())
-	resp, err := client.Do(req)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		logger.LoggerAgent.Infof("API already exists in the CP hence ignoring the event. API zip name %s", apiZipName)
+		return nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected response status: %s", resp.Status)
 	}
