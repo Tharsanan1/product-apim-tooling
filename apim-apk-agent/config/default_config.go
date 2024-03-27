@@ -25,7 +25,7 @@ var defaultConfig = &Config{
 		ServiceURLDeprecated: UnassignedAsDeprecated,
 		Username:             "admin",
 		Password:             "$env{cp_admin_pwd}",
-		ClientId:             "",
+		ClientID:             "",
 		ClientSecret:         "",
 		EnvironmentLabels:    []string{"Default"},
 		RetryInterval:        5,

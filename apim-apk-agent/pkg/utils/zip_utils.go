@@ -21,6 +21,7 @@ import (
 	"io"
 )
 
+// ZipFile holds the content and the path of the file inside the zip folder
 type ZipFile struct {
 	Path    string
 	Content string
@@ -42,8 +43,5 @@ func CreateZipFile(writer io.Writer, zipFiles []ZipFile) error {
 			return err
 		}
 	}
-	if err := zipWriter.Close(); err != nil {
-		return err
-	}
-	return nil
+	return zipWriter.Close()
 }

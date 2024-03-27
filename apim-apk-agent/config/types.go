@@ -109,7 +109,7 @@ type controlPlane struct {
 	BrokerConnectionParameters brokerConnectionParameters
 	HTTPClient                 httpClient
 	RequestWorkerPool          requestWorkerPool
-	ClientId                   string
+	ClientID                   string
 	ClientSecret               string
 }
 

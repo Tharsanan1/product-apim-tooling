@@ -17,49 +17,54 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"net/http"
 	"io"
-	"net/url"
-	"mime/multipart"
-	"bytes"
 	"io/ioutil"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/config"
 	logger "github.com/wso2/product-apim-tooling/apim-apk-agent/internal/loggers"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/tlsutils"
 )
 
+// Scope - token scope
 type Scope string
 
 const (
-	ApiImportRelativePath   = "api/am/publisher/v4/apis/import?preserveProvider=false&overwrite=true"
-	DCRRegisterRelativePath = "client-registration/v0.17/register"
-	TokenRelativePath       = "oauth2/token"
-	APIDeleteRelativePath   = "api/am/publisher/v4/apis/"
-	payloadJson             = `{
+	// APIImportRelativePath is the relative path of API import in publisher rest API
+	APIImportRelativePath = "api/am/publisher/v4/apis/import?preserveProvider=false&overwrite=true"
+	// TokenRelativePath is the relative path for getting token in publisher rest API
+	TokenRelativePath = "oauth2/token"
+	// APIDeleteRelativePath is the relative path of delete api in publisher rest API
+	APIDeleteRelativePath = "api/am/publisher/v4/apis/"
+	payloadJSON           = `{
         "callbackUrl": "www.google.lk",
         "clientName": "rest_api_publisher",
         "owner": "admin",
         "grantType": "client_credentials password refresh_token",
         "saasApp": true
     }`
+	// AdminScope admin scope
 	AdminScope Scope = "apim:admin"
+	// ImportExportScope import export api scope
 	ImportExportScope Scope = "apim:api_import_export"
 )
 
 var (
-	dcrRegisterUrl string
-	tokenUrl       string
-	apiImportUrl   string
-	apiDeleteUrl   string
-	username       string
-	password       string
-	skipSSL        bool
-	clientId       string
-	clientSecret   string
+	tokenURL             string
+	apiImportURL         string
+	apiDeleteURL         string
+	username             string
+	password             string
+	skipSSL              bool
+	clientID             string
+	clientSecret         string
 	basicAuthHeaderValue string
 )
 
@@ -75,19 +80,17 @@ func init() {
 	cpURL := cpConfigs.ServiceURL
 	// If the eventHub URL is configured with trailing slash
 	if strings.HasSuffix(cpURL, "/") {
-		apiImportUrl = cpURL + ApiImportRelativePath
-		dcrRegisterUrl = cpURL + DCRRegisterRelativePath
-		tokenUrl = cpURL + TokenRelativePath
-		apiDeleteUrl = cpURL + APIDeleteRelativePath
+		apiImportURL = cpURL + APIImportRelativePath
+		tokenURL = cpURL + TokenRelativePath
+		apiDeleteURL = cpURL + APIDeleteRelativePath
 	} else {
-		apiImportUrl = cpURL + "/" + ApiImportRelativePath
-		dcrRegisterUrl = cpURL + "/" + DCRRegisterRelativePath
-		tokenUrl = cpURL + "/" + TokenRelativePath
-		apiDeleteUrl = cpURL + "/" + APIDeleteRelativePath
+		apiImportURL = cpURL + "/" + APIImportRelativePath
+		tokenURL = cpURL + "/" + TokenRelativePath
+		apiDeleteURL = cpURL + "/" + APIDeleteRelativePath
 	}
 	username = cpConfigs.Username
 	password = cpConfigs.Password
-	clientId = cpConfigs.ClientId
+	clientID = cpConfigs.ClientID
 	clientSecret = cpConfigs.ClientSecret
 	skipSSL = cpConfigs.SkipSSLVerification
 
@@ -95,28 +98,31 @@ func init() {
 	basicAuthHeaderValue = GetBasicAuthHeaderValue(username, password)
 }
 
+// Base64EncodeCredentials encodes the given username and password into a base64 string.
 func Base64EncodeCredentials(username, password string) string {
 	credentials := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(credentials))
 }
 
+// GetBasicAuthHeaderValue constructs and returns the Basic authentication header value using the provided username and password.
 func GetBasicAuthHeaderValue(username, password string) string {
 	return fmt.Sprintf("Basic %s", Base64EncodeCredentials(username, password))
 }
 
-func GetToken(scopes []string, clientId string, clientSecret string) (string, error) {
+// GetToken retrieves an OAuth token using the provided credentials and scopes.
+func GetToken(scopes []string, clientID string, clientSecret string) (string, error) {
 	form := url.Values{}
 	form.Set("grant_type", "password")
 	form.Set("username", username)
 	form.Set("password", password)
 	form.Set("scope", strings.Join(scopes, " "))
-	req, err := http.NewRequest("POST", tokenUrl, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", GetBasicAuthHeaderValue(clientId, clientSecret))
+	req.Header.Set("Authorization", GetBasicAuthHeaderValue(clientID, clientSecret))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	
+
 	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
 		return "", err
@@ -149,22 +155,22 @@ func GetToken(scopes []string, clientId string, clientSecret string) (string, er
 	return accessToken, nil
 }
 
-func GetSuitableAuthHeadervalue(scopes []string) (string, error){
-	if (clientId != "" && clientSecret != "" ) {
-		token, err := GetToken(scopes, clientId, clientSecret)
-		if (err != nil) {
+// GetSuitableAuthHeadervalue returns an appropriate authentication header value based on whether client credentials are provided.
+func GetSuitableAuthHeadervalue(scopes []string) (string, error) {
+	if clientID != "" && clientSecret != "" {
+		token, err := GetToken(scopes, clientID, clientSecret)
+		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Bearer %s", token), nil
-	} else {
-		return basicAuthHeaderValue, nil
 	}
+	return basicAuthHeaderValue, nil
 }
 
-
+// ImportAPI imports an API from a zip file, returning the ID of the imported API.
 func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) (string, error) {
 	authHeaderVal, err := GetSuitableAuthHeadervalue([]string{string(AdminScope), string(ImportExportScope)})
-	if(err != nil) {
+	if err != nil {
 		return "", err
 	}
 	body := &bytes.Buffer{}
@@ -177,14 +183,14 @@ func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) (string, error) {
 		return "", err
 	}
 	writer.Close()
-	req, err := http.NewRequest("POST", apiImportUrl, body)
+	req, err := http.NewRequest("POST", apiImportURL, body)
 	if err != nil {
 		return "", err
 	}
 
 	req.Header.Set("Authorization", authHeaderVal)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("Accept", "application/json") 
+	req.Header.Set("Accept", "application/json")
 	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
 		return "", err
@@ -213,13 +219,14 @@ func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) (string, error) {
 	return id, nil
 }
 
+// DeleteAPI deletes an API given its UUID.
 func DeleteAPI(apiUUID string) error {
-	deleteUrl := apiDeleteUrl + apiUUID
+	deleteURL := apiDeleteURL + apiUUID
 	authheaderval, err := GetSuitableAuthHeadervalue([]string{string(AdminScope), string(ImportExportScope)})
-		if(err != nil) {
+	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("DELETE", deleteUrl, nil)
+	req, err := http.NewRequest("DELETE", deleteURL, nil)
 	if err != nil {
 		return err
 	}
