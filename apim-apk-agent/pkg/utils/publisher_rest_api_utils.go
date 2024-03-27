@@ -58,6 +58,9 @@ var (
 	username       string
 	password       string
 	skipSSL        bool
+	clientId       string
+	clientSecret   string
+	basicAuthHeaderValue string
 )
 
 func init() {
@@ -84,7 +87,12 @@ func init() {
 	}
 	username = cpConfigs.Username
 	password = cpConfigs.Password
+	clientId = cpConfigs.ClientId
+	clientSecret = cpConfigs.ClientSecret
 	skipSSL = cpConfigs.SkipSSLVerification
+
+	// If clientId and clientSecret is not provided use username and password as basic auth to access rest apis.
+	basicAuthHeaderValue = GetBasicAuthHeaderValue(username, password)
 }
 
 func Base64EncodeCredentials(username, password string) string {
@@ -95,34 +103,6 @@ func Base64EncodeCredentials(username, password string) string {
 func GetBasicAuthHeaderValue(username, password string) string {
 	return fmt.Sprintf("Basic %s", Base64EncodeCredentials(username, password))
 }
-
-func RegisterClient() ([]byte, error){
-	
-	body := bytes.NewBuffer([]byte(payloadJson))
-	req, err := http.NewRequest("POST", dcrRegisterUrl, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", GetBasicAuthHeaderValue(username, password))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	responseBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check for non-200 response status
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected response status: %s", resp.Status)
-	}
-
-	return responseBody, nil
-}
-
 
 func GetToken(scopes []string, clientId string, clientSecret string) (string, error) {
 	form := url.Values{}
@@ -169,72 +149,73 @@ func GetToken(scopes []string, clientId string, clientSecret string) (string, er
 	return accessToken, nil
 }
 
-func RegistClientAndGetToken(scopes []string) (string, error){
-	body, err := RegisterClient();
-	if (err != nil) {
-		return "", err
+func GetSuitableAuthHeadervalue(scopes []string) (string, error){
+	if (clientId != "" && clientSecret != "" ) {
+		token, err := GetToken(scopes, clientId, clientSecret)
+		if (err != nil) {
+			return "", err
+		}
+		return fmt.Sprintf("Bearer %s", token), nil
+	} else {
+		return basicAuthHeaderValue, nil
 	}
-	type ClientInfo struct {
-		ClientID     string `json:"clientId"`
-		ClientSecret string `json:"clientSecret"`
-	}
-	var clientInfo ClientInfo
-	jsonErr := json.Unmarshal(body, &clientInfo)
-	if jsonErr != nil {
-		return "", jsonErr
-	}
-	clientID := clientInfo.ClientID
-	clientSecret := clientInfo.ClientSecret
-
-	token, tokenError := GetToken(scopes, clientID, clientSecret)
-	if (tokenError != nil) {
-		return "", tokenError
-	}
-	return token, nil;
 }
 
 
-func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) error {
-	token, err := RegistClientAndGetToken([]string{string(AdminScope), string(ImportExportScope)})
-		if(err != nil) {
-		return err
+func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) (string, error) {
+	authHeaderVal, err := GetSuitableAuthHeadervalue([]string{string(AdminScope), string(ImportExportScope)})
+	if(err != nil) {
+		return "", err
 	}
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", apiZipName)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if _, err := io.Copy(part, zipFileBytes); err != nil {
-		return err
+		return "", err
 	}
 	writer.Close()
 	req, err := http.NewRequest("POST", apiImportUrl, body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", authHeaderVal)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Accept", "application/json") 
 	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusConflict {
 		logger.LoggerAgent.Infof("API already exists in the CP hence ignoring the event. API zip name %s", apiZipName)
-		return nil
+		return "", nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected response status: %s", resp.Status)
+		return "", fmt.Errorf("unexpected response status: %s", resp.Status)
+	}
+	// try to parse the body as json and extract id from the response.
+	var responseMap map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&responseMap)
+	if err != nil {
+		// TODO after APIM is able to send json response, we should return error here, Until then return nil for error as its expected.
+		return "", nil
 	}
 
-	return nil
+	// Assuming the response contains an ID field, you can extract it like this:
+	id, ok := responseMap["id"].(string)
+	if !ok {
+		return "", nil
+	}
+	return id, nil
 }
 
 func DeleteAPI(apiUUID string) error {
 	deleteUrl := apiDeleteUrl + apiUUID
-	token, err := RegistClientAndGetToken([]string{string(AdminScope), string(ImportExportScope)})
+	authheaderval, err := GetSuitableAuthHeadervalue([]string{string(AdminScope), string(ImportExportScope)})
 		if(err != nil) {
 		return err
 	}
@@ -243,7 +224,7 @@ func DeleteAPI(apiUUID string) error {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", authheaderval)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := tlsutils.InvokeControlPlane(req, skipSSL)
 	if err != nil {

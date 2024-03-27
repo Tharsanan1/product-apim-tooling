@@ -55,6 +55,7 @@ func StartInternalServer(port uint) {
 			return
 		}
 		if (event.Event == DeleteEvent) {
+			loggers.LoggerMgtServer.Infof("Delete event received with APIUUID: %s", event.API.APIUUID)
 			// Delete the api
 			utils.DeleteAPI(event.API.APIUUID)
 		} else {
@@ -96,13 +97,13 @@ func StartInternalServer(port uint) {
 			}
 			// delete chunk 2 end
 
-			err := utils.ImportAPI(fmt.Sprintf("admin-%s-%s.zip", event.API.APIName, event.API.APIVersion), &buf)
+			id, err := utils.ImportAPI(fmt.Sprintf("admin-%s-%s.zip", event.API.APIName, event.API.APIVersion), &buf)
 			if err != nil {
 				loggers.LoggerMgtServer.Errorf("Error while importing API. Sending error response to Adapter.")
 				c.JSON(http.StatusInternalServerError, err.Error())
 				return
 			}
-			c.JSON(http.StatusOK, "")
+			c.JSON(http.StatusOK, map[string]string{"id": id})
 		}
 	})
 	gin.SetMode(gin.ReleaseMode)
