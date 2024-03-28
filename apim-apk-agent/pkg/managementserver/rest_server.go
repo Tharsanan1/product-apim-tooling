@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/config"
-	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/loggers"
+	logger "github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/loggers"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/utils"
 	"gopkg.in/yaml.v2"
 	"net/http"
@@ -53,7 +53,7 @@ func StartInternalServer(port uint) {
 			return
 		}
 		if event.Event == DeleteEvent {
-			loggers.LoggerMgtServer.Infof("Delete event received with APIUUID: %s", event.API.APIUUID)
+			logger.LoggerMgtServer.Infof("Delete event received with APIUUID: %s", event.API.APIUUID)
 			// Delete the api
 			utils.DeleteAPI(event.API.APIUUID)
 		} else {
@@ -68,12 +68,12 @@ func StartInternalServer(port uint) {
 			}}
 			var buf bytes.Buffer
 			if err := utils.CreateZipFile(&buf, zipFiles); err != nil {
-				loggers.LoggerMgtServer.Errorf("Error while creating apim zip file for api uuid: %s. Error: %+v", event.API.APIUUID, err)
+				logger.LoggerMgtServer.Errorf("Error while creating apim zip file for api uuid: %s. Error: %+v", event.API.APIUUID, err)
 			}
 
 			id, err := utils.ImportAPI(fmt.Sprintf("admin-%s-%s.zip", event.API.APIName, event.API.APIVersion), &buf)
 			if err != nil {
-				loggers.LoggerMgtServer.Errorf("Error while importing API. Sending error response to Adapter.")
+				logger.LoggerMgtServer.Errorf("Error while importing API. Sending error response to Adapter.")
 				c.JSON(http.StatusInternalServerError, err.Error())
 				return
 			}

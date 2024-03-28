@@ -110,7 +110,7 @@ func InvokeControlPlane(req *http.Request, skipSSL bool) (*http.Response, error)
 			TLSClientConfig: &tls.Config{RootCAs: caCertPool},
 		}
 	} else {
-			tr = &http.Transport{
+		tr = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 	}

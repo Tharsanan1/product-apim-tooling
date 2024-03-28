@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/config"
-	logger "github.com/wso2/product-apim-tooling/apim-apk-agent/internal/loggers"
+	logger "github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/loggers"
 	"github.com/wso2/product-apim-tooling/apim-apk-agent/pkg/tlsutils"
 )
 
@@ -73,7 +73,7 @@ func init() {
 	conf, errReadConfig := config.ReadConfigs()
 	if errReadConfig != nil {
 		// This has to be error. For debugging purpose info
-		logger.LoggerSynchronizer.Errorf("Error reading configs: %v", errReadConfig)
+		logger.LoggerUtils.Errorf("Error reading configs: %v", errReadConfig)
 	}
 	// Populate data from the config
 	cpConfigs := conf.ControlPlane
@@ -197,7 +197,7 @@ func ImportAPI(apiZipName string, zipFileBytes *bytes.Buffer) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusConflict {
-		logger.LoggerAgent.Infof("API already exists in the CP hence ignoring the event. API zip name %s", apiZipName)
+		logger.LoggerTLSUtils.Infof("API already exists in the CP hence ignoring the event. API zip name %s", apiZipName)
 		return "", nil
 	}
 	if resp.StatusCode != http.StatusOK {
