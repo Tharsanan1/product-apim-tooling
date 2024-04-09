@@ -422,9 +422,9 @@ func extractOperations(event APICPEvent) ([]APIOperation, []ScopeWrapper, error)
 
 func findMatchingAPKOperation(path string, verb string, operations []OperationFromDP) *OperationFromDP {
 	for _, operationFromDP := range operations {
-		if strings.EqualFold(operationFromDP.Verb, verb) {
+				if strings.EqualFold(operationFromDP.Verb, verb) {
 			path = processOpenAPIPath(path)
-			if matchRegex(operationFromDP.Path, path) {
+			if pathMatchWithoutRegex(operationFromDP.Path, path) {
 				return &operationFromDP
 			}
 		}
@@ -462,9 +462,23 @@ func matchRegex(regexStr string, targetStr string) bool {
 	return regexPattern.MatchString(targetStr)
 }
 
+func pathMatchWithoutRegex(pathWithRegex string, path string) bool {
+	return removeFirstAndLastChars(pathWithRegex) == path
+}
+
+func removeFirstAndLastChars(s string) string {
+	if len(s) > 2 {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
+
 func processOpenAPIPath(path string) string {
+	if path == "/*" {
+		return "(.*)"
+	}
 	re := regexp.MustCompile(`{[^}]+}`)
-	return re.ReplaceAllString(path, "hardcode")
+	return re.ReplaceAllString(path, "(.*)")
 }
 
 // ConvertYAMLToMap converts a YAML string to a map[string]interface{}
